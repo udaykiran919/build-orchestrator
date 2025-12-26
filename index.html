@@ -79,6 +79,10 @@
             background: #fff3cd;
             color: #856404;
         }
+        .status.failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
         button {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -88,9 +92,14 @@
             cursor: pointer;
             font-weight: bold;
             margin-top: 15px;
+            transition: 0.3s;
         }
         button:hover {
             transform: scale(1.05);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         .section {
             background: white;
@@ -113,6 +122,10 @@
             margin: 10px 0;
             font-family: inherit;
         }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
         .build-list {
             list-style: none;
         }
@@ -122,6 +135,24 @@
             margin: 10px 0;
             border-radius: 5px;
             border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .message {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
         footer {
             text-align: center;
@@ -131,81 +162,185 @@
     </style>
 </head>
 <body>
-<div class="container">
-    <header>
-        <h1>🚀 Build Orchestrator</h1>
-        <p class="subtitle">Zanika - AI-Powered Build Management System</p>
-    </header>
-    
-    <div class="dashboard">
-        <div class="card">
-            <h2>📊 Build Status</h2>
-            <div class="stat" id="buildStatus">0</div>
-            <span class="status active">Active Builds</span>
-            <button onclick="addBuild()">+ Start Build</button>
-        </div>
-        <div class="card">
-            <h2>⚙️ System Health</h2>
-            <div class="stat">95%</div>
-            <span class="status active">Operational</span>
-        </div>
-        <div class="card">
-            <h2>📈 Builds Today</h2>
-            <div class="stat">12</div>
-            <span class="status active">On Track</span>
-        </div>
-    </div>
-    
-    <div class="section">
-        <h3>🔧 Create New Build</h3>
-        <form onsubmit="submitBuild(event)">
-            <input type="text" id="projectName" placeholder="Project Name" required>
-            <select id="buildType" required>
-                <option value="">Select Build Type</option>
-                <option value="development">Development</option>
-                <option value="staging">Staging</option>
-                <option value="production">Production</option>
-            </select>
-            <textarea id="description" rows="3" placeholder="Build Description"></textarea>
-            <button type="submit">🚀 Start Build</button>
-        </form>
-    </div>
-    
-    <div class="section">
-        <h3>📋 Recent Builds</h3>
-        <ul id="buildList" class="build-list">
-            <li class="build-item">
-                <strong>Zanika-Core v1.2.0</strong><br>
-                Status: <span class="status active">Complete</span><br>
-                Time: 2024-12-26 10:30 AM
-            </li>
-        </ul>
-    </div>
-    
-    <footer>
-        <p>🌱 Zanika Build Orchestrator | Powered by AI</p>
-    </footer>
-</div>
+    <div class="container">
+        <header>
+            <h1>Build Orchestrator</h1>
+            <p class="subtitle">Zanika - AI-Powered Build Management System</p>
+        </header>
 
-<script>
-let buildCount = 0;
-function addBuild() {
-    buildCount++;
-    document.getElementById('buildStatus').textContent = buildCount;
-}
-function submitBuild(event) {
-    event.preventDefault();
-    const pn = document.getElementById('projectName').value;
-    const li = document.createElement('li');
-    li.className = 'build-item';
-    li.innerHTML = `<strong>${pn}</strong><br>Status: <span class="status pending">In Progress</span><br>Time: ${new Date().toLocaleString()}`;
-    document.getElementById('buildList').insertBefore(li, document.getElementById('buildList').firstChild);
-    document.getElementById('projectName').value = '';
-    document.getElementById('buildType').value = '';
-    document.getElementById('description').value = '';
-    addBuild();
-    alert('Build for ' + pn + ' started!');
-}
-</script>
+        <div id="message"></div>
+
+        <div class="dashboard">
+            <div class="card">
+                <h2>Active Builds</h2>
+                <div class="stat" id="buildCount">0</div>
+                <span class="status active">Connected</span>
+                <button onclick="loadBuilds()">Refresh</button>
+            </div>
+            <div class="card">
+                <h2>Server Health</h2>
+                <div class="stat" id="serverStatus">--</div>
+                <span class="status active" id="healthStatus">Checking...</span>
+                <button onclick="checkHealth()">Check Now</button>
+            </div>
+            <div class="card">
+                <h2>API Status</h2>
+                <div id="apiStatus">Initializing...</div>
+                <span class="status active" id="apiHealthIndicator">Pending</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>Create New Build</h3>
+            <form onsubmit="submitBuild(event)">
+                <input type="text" id="projectName" placeholder="Project Name" required>
+                <select id="buildType" required>
+                    <option value="">Select Build Type</option>
+                    <option value="development">Development</option>
+                    <option value="staging">Staging</option>
+                    <option value="production">Production</option>
+                </select>
+                <textarea id="description" rows="3" placeholder="Build Description (Optional)"></textarea>
+                <button type="submit" id="submitBtn">Start Build</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h3>Recent Builds</h3>
+            <ul class="build-list" id="buildList">
+                <li class="build-item">
+                    <div>
+                        <p style="color: #999;">Loading builds...</p>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <footer>
+            Zanika Build Orchestrator | Powered by AI
+        </footer>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:5000/api';
+
+        function showMessage(message, type = 'success') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = '<div class="message ' + type + '">' + message + '</div>';
+            setTimeout(() => { messageDiv.innerHTML = ''; }, 5000);
+        }
+
+        async function checkHealth() {
+            try {
+                const response = await fetch(API_BASE_URL + '/health');
+                const data = await response.json();
+                document.getElementById('healthStatus').textContent = 'Healthy';
+                document.getElementById('serverStatus').textContent = 'OK';
+                showMessage('Server is running and healthy!', 'success');
+            } catch (error) {
+                document.getElementById('healthStatus').textContent = 'Offline';
+                document.getElementById('serverStatus').textContent = 'DOWN';
+                showMessage('Server is not responding. Run: npm start', 'error');
+            }
+        }
+
+        async function loadBuilds() {
+            try {
+                const response = await fetch(API_BASE_URL + '/builds');
+                if (!response.ok) throw new Error('Failed to load builds');
+                
+                const builds = await response.json();
+                document.getElementById('buildCount').textContent = builds.length;
+                
+                const buildList = document.getElementById('buildList');
+                if (builds.length === 0) {
+                    buildList.innerHTML = '<li class="build-item"><div><p style="color: #999;">No builds yet!</p></div></li>';
+                    return;
+                }
+
+                buildList.innerHTML = '';
+                builds.forEach(build => {
+                    const li = document.createElement('li');
+                    li.className = 'build-item';
+                    const statusClass = build.status.toLowerCase().replace(/ /g, '');
+                    li.innerHTML = '<div><strong>' + build.projectName + '</strong><br><small>Type: ' + build.buildType + ' | Status: <span class="status ' + statusClass + '">' + build.status + '</span></small><br><small style="color: #999;">' + new Date(build.createdAt).toLocaleString() + '</small></div><div style="display:flex;gap:10px;"><button onclick="updateBuildStatus(\'' + build._id + '\', \'Complete\')">Complete</button><button onclick="deleteBuild(\'' + build._id + '\')">Delete</button></div>';
+                    buildList.appendChild(li);
+                });
+                showMessage('Loaded ' + builds.length + ' build(s)', 'success');
+            } catch (error) {
+                showMessage('Error loading builds: ' + error.message, 'error');
+            }
+        }
+
+        async function submitBuild(event) {
+            event.preventDefault();
+            
+            const projectName = document.getElementById('projectName').value;
+            const buildType = document.getElementById('buildType').value;
+            const description = document.getElementById('description').value;
+
+            if (!projectName || !buildType) {
+                showMessage('Please fill in required fields', 'error');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating...';
+
+            try {
+                const response = await fetch(API_BASE_URL + '/builds', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ projectName, buildType, description })
+                });
+
+                if (!response.ok) throw new Error('Failed to create build');
+                
+                showMessage('Build for "' + projectName + '" created!', 'success');
+                document.getElementById('projectName').value = '';
+                document.getElementById('buildType').value = '';
+                document.getElementById('description').value = '';
+                loadBuilds();
+            } catch (error) {
+                showMessage('Error creating build: ' + error.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Start Build';
+            }
+        }
+
+        async function updateBuildStatus(buildId, status) {
+            try {
+                const response = await fetch(API_BASE_URL + '/builds/' + buildId, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: status })
+                });
+                if (!response.ok) throw new Error('Failed to update build');
+                showMessage('Build status updated!', 'success');
+                loadBuilds();
+            } catch (error) {
+                showMessage('Error updating build: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteBuild(buildId) {
+            if (!confirm('Delete this build?')) return;
+            try {
+                const response = await fetch(API_BASE_URL + '/builds/' + buildId, { method: 'DELETE' });
+                if (!response.ok) throw new Error('Failed to delete build');
+                showMessage('Build deleted!', 'success');
+                loadBuilds();
+            } catch (error) {
+                showMessage('Error deleting build: ' + error.message, 'error');
+            }
+        }
+
+        window.addEventListener('load', () => {
+            checkHealth();
+            loadBuilds();
+        });
+    </script>
 </body>
 </html>
